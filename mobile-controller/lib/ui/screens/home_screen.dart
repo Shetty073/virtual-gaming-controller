@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:url_launcher/url_launcher.dart';
@@ -268,9 +269,106 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  void _launchController() {
+  bool _isConnecting = false;
+
+  Future<void> _launchController() async {
     final host = _ipController.text.trim();
     final port = int.tryParse(_portController.text.trim()) ?? 45455;
+
+    if (host.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: const Row(
+            children: [
+              Icon(Icons.error_outline_rounded, color: Colors.white),
+              SizedBox(width: 10),
+              Expanded(child: Text('Please enter a valid Desktop Host IP')),
+            ],
+          ),
+          backgroundColor: const Color(0xFFFF0055),
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        ),
+      );
+      return;
+    }
+
+    setState(() => _isConnecting = true);
+
+    bool isConnected = false;
+
+    // Check HTTP status API (port 45450 by default or test UDP handshake)
+    try {
+      final response = await http
+          .get(Uri.parse('http://$host:45450/api/status'))
+          .timeout(const Duration(milliseconds: 1500));
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        if (data['isUdpRunning'] == true || data['status'] == 'online') {
+          isConnected = true;
+        }
+      }
+    } catch (_) {
+      // If HTTP fails or is blocked on subnet, try quick UDP socket check
+      try {
+        final testSocket = await RawDatagramSocket.bind(InternetAddress.anyIPv4, 0);
+        final pingPayload = utf8.encode('{"seq":0,"ping":true}');
+        final addresses = await InternetAddress.lookup(host).timeout(const Duration(milliseconds: 800));
+        if (addresses.isNotEmpty) {
+          testSocket.send(pingPayload, addresses.first, port);
+          // If DNS/IP resolution succeeded and socket dispatched
+          // and discovery found it, treat as reachable
+          if (_discoveredServers.any((s) => s['host'] == host)) {
+            isConnected = true;
+          }
+        }
+        testSocket.close();
+      } catch (_) {}
+    }
+
+    if (!mounted) return;
+    setState(() => _isConnecting = false);
+
+    if (!isConnected) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Row(
+            children: [
+              const Icon(Icons.wifi_off_rounded, color: Colors.white, size: 22),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'UNABLE TO CONNECT TO DESKTOP SERVER',
+                      style: TextStyle(fontWeight: FontWeight.w900, fontSize: 12, color: Colors.white, letterSpacing: 0.5),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      'Make sure Desktop Companion is running at $host:$port',
+                      style: const TextStyle(fontSize: 10.5, color: Color(0xFFCBD5E1)),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          backgroundColor: const Color(0xFFDC2626),
+          duration: const Duration(seconds: 3),
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+          action: SnackBarAction(
+            label: 'RETRY',
+            textColor: const Color(0xFF00F0FF),
+            onPressed: _launchController,
+          ),
+        ),
+      );
+      return;
+    }
 
     Navigator.of(context).push(
       MaterialPageRoute(
@@ -595,18 +693,34 @@ class _HomeScreenState extends State<HomeScreen> {
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
                   elevation: 8,
                 ),
-                onPressed: _launchController,
-                child: const Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Icon(Icons.sports_esports_rounded, size: 24),
-                    SizedBox(width: 8),
-                    Text(
-                      'START CONTROLLER',
-                      style: TextStyle(fontSize: 14, fontWeight: FontWeight.w900, letterSpacing: 1.5),
-                    ),
-                  ],
-                ),
+                onPressed: _isConnecting ? null : _launchController,
+                child: _isConnecting
+                    ? const Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          SizedBox(
+                            width: 20,
+                            height: 20,
+                            child: CircularProgressIndicator(strokeWidth: 2.5, color: Color(0xFF030712)),
+                          ),
+                          SizedBox(width: 12),
+                          Text(
+                            'CONNECTING TO SERVER...',
+                            style: TextStyle(fontSize: 13, fontWeight: FontWeight.w900, letterSpacing: 1),
+                          ),
+                        ],
+                      )
+                    : const Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(Icons.sports_esports_rounded, size: 24),
+                          SizedBox(width: 8),
+                          Text(
+                            'START CONTROLLER',
+                            style: TextStyle(fontSize: 14, fontWeight: FontWeight.w900, letterSpacing: 1.5),
+                          ),
+                        ],
+                      ),
               ),
             ),
           ],

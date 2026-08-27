@@ -6,6 +6,10 @@
 
 Turn your smartphone or tablet into a high-precision, low-latency steering wheel and button box controller for driving and simulation games like **Euro Truck Simulator 2 (ETS2)**, **American Truck Simulator (ATS)**, **Fernbus Coach Simulator**, **BeamNG.drive**, and **Assetto Corsa**.
 
+<div align="center">
+  <img src="screenshots/0.png" alt="Virtual Gaming Controller - Desktop Companion & Mobile Cockpit" width="95%" style="border-radius: 12px; box-shadow: 0 8px 30px rgba(0,240,255,0.25);" />
+</div>
+
 ---
 
 ## 🌟 Key Features
