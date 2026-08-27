@@ -11,6 +11,8 @@ function shutdownEverything() {
 }
 
 function createWindow() {
+  const iconPath = path.resolve(__dirname, '../icon.png');
+
   mainWindow = new BrowserWindow({
     width: 1280,
     height: 840,
@@ -18,6 +20,7 @@ function createWindow() {
     minHeight: 700,
     title: 'Virtual Gaming Controller - Desktop Companion',
     backgroundColor: '#03070d',
+    icon: iconPath,
     autoHideMenuBar: true,
     webPreferences: {
       nodeIntegration: false,

@@ -13,7 +13,12 @@ import {
   Square,
   RotateCcw,
   Save,
-  CheckCircle2
+  CheckCircle2,
+  Info,
+  ExternalLink,
+  Github,
+  Globe,
+  Heart
 } from 'lucide-react';
 
 interface ClientDevice {
@@ -52,7 +57,8 @@ interface KeyMappingProfile {
 }
 
 export const App: React.FC = () => {
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'webcontroller' | 'mapping' | 'settings' | 'connection'>('dashboard');
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'webcontroller' | 'mapping' | 'settings' | 'connection' | 'about'>('dashboard');
+  const [showAboutModal, setShowAboutModal] = useState<boolean>(false);
   const [qrDataUrl, setQrDataUrl] = useState<string>('');
   const [clients, setClients] = useState<ClientDevice[]>([]);
   const [inputs, setInputs] = useState({ steer: 0, throttle: 0, brake: 0, activeButtons: [] as string[] });
@@ -263,6 +269,11 @@ export const App: React.FC = () => {
             onClick={() => setActiveTab('connection')}
             style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '8px 16px', borderRadius: '8px', border: 'none', cursor: 'pointer', fontSize: '13px', fontWeight: 600, background: activeTab === 'connection' ? '#00f0ff' : 'transparent', color: activeTab === 'connection' ? '#050a14' : '#94a3b8' }}>
             <Wifi size={16} /> QR / Pair
+          </button>
+          <button 
+            onClick={() => setActiveTab('about')}
+            style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '8px 16px', borderRadius: '8px', border: 'none', cursor: 'pointer', fontSize: '13px', fontWeight: 600, background: activeTab === 'about' ? '#00f0ff' : 'transparent', color: activeTab === 'about' ? '#050a14' : '#94a3b8' }}>
+            <Info size={16} /> About
           </button>
         </nav>
 
@@ -718,6 +729,81 @@ export const App: React.FC = () => {
                 <span style={{ color: '#00f0ff' }}>{serverInfo.udpPort}</span>
               </div>
             </div>
+          </div>
+        )}
+
+        {/* About View */}
+        {activeTab === 'about' && (
+          <div style={{ maxWidth: '640px', margin: '0 auto', background: 'rgba(15, 23, 42, 0.85)', border: '1px solid rgba(0, 240, 255, 0.35)', borderRadius: '24px', padding: '36px', textAlign: 'center', boxShadow: '0 0 40px rgba(0, 240, 255, 0.15)', backdropFilter: 'blur(16px)' }}>
+            <div style={{ width: '80px', height: '80px', margin: '0 auto 20px auto', borderRadius: '20px', background: 'linear-gradient(135deg, #00f0ff, #0077ff)', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 0 25px rgba(0, 240, 255, 0.45)', border: '2px solid #00f0ff' }}>
+              <Gamepad2 size={44} color="#050a14" />
+            </div>
+
+            <h2 style={{ fontSize: '24px', fontWeight: 900, color: '#ffffff', letterSpacing: '1px', fontFamily: 'Orbitron, monospace', marginBottom: '4px' }}>
+              VIRTUAL GAMING CONTROLLER
+            </h2>
+            <p style={{ fontSize: '13px', color: '#00f0ff', fontWeight: 600, marginBottom: '24px' }}>
+              High-Precision Simulator Controller & Companion
+            </p>
+
+            <div style={{ background: 'rgba(30, 41, 59, 0.6)', border: '1px solid rgba(255, 255, 255, 0.08)', borderRadius: '16px', padding: '20px', textAlign: 'left', marginBottom: '24px', lineHeight: '1.7' }}>
+              <p style={{ fontSize: '14px', color: '#e2e8f0', marginBottom: '12px' }}>
+                👋 <strong>Warm Greetings!</strong> Welcome to Virtual Gaming Controller. This tool turns any mobile device into a sub-millisecond, low-latency steering wheel and interactive cockpit button box for simulation games.
+              </p>
+              <div style={{ borderTop: '1px solid rgba(255, 255, 255, 0.1)', paddingTop: '12px', marginTop: '12px' }}>
+                <p style={{ fontSize: '13px', color: '#94a3b8', margin: 0 }}>
+                  Crafted with passion by <strong style={{ color: '#00f0ff' }}>Ashish Shetty</strong> — a software engineer and builder enthusiastic about real-time systems, gaming hardware emulation, and fluid user experiences.
+                </p>
+              </div>
+            </div>
+
+            <div style={{ display: 'flex', gap: '14px', justifyContent: 'center', flexWrap: 'wrap' }}>
+              <a
+                href="https://ashishshetty.in/"
+                target="_blank"
+                rel="noreferrer"
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '8px',
+                  padding: '10px 20px',
+                  borderRadius: '12px',
+                  background: 'linear-gradient(135deg, #00f0ff, #00a2ff)',
+                  color: '#050a14',
+                  fontWeight: 700,
+                  fontSize: '13px',
+                  textDecoration: 'none',
+                  boxShadow: '0 0 15px rgba(0, 240, 255, 0.3)',
+                  transition: 'transform 0.2s'
+                }}>
+                <Globe size={16} /> Personal Webpage <ExternalLink size={14} />
+              </a>
+
+              <a
+                href="https://github.com/Shetty073/"
+                target="_blank"
+                rel="noreferrer"
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '8px',
+                  padding: '10px 20px',
+                  borderRadius: '12px',
+                  background: 'rgba(30, 41, 59, 0.9)',
+                  border: '1px solid rgba(0, 240, 255, 0.3)',
+                  color: '#ffffff',
+                  fontWeight: 700,
+                  fontSize: '13px',
+                  textDecoration: 'none',
+                  transition: 'background 0.2s'
+                }}>
+                <Github size={16} /> GitHub Profile <ExternalLink size={14} />
+              </a>
+            </div>
+
+            <p style={{ fontSize: '11px', color: '#64748B', marginTop: '24px' }}>
+              Version 1.0.0 • Licensed under GNU LGPL v2.1
+            </p>
           </div>
         )}
 

@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
+import 'package:url_launcher/url_launcher.dart';
 import '../../core/models/controller_models.dart';
 import '../../core/network/udp_client.dart';
 import 'controller_screen.dart';
@@ -282,6 +283,119 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
+  Future<void> _launchExternalUrl(String urlString) async {
+    final uri = Uri.parse(urlString);
+    try {
+      await launchUrl(uri, mode: LaunchMode.externalApplication);
+    } catch (_) {}
+  }
+
+  void _showAboutDialog() {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: const Color(0xFF0F172A),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        titlePadding: const EdgeInsets.fromLTRB(20, 20, 20, 0),
+        contentPadding: const EdgeInsets.fromLTRB(20, 16, 20, 20),
+        title: Row(
+          children: [
+            Container(
+              width: 38,
+              height: 38,
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(10),
+                gradient: const LinearGradient(colors: [Color(0xFF00F0FF), Color(0xFF0077FF)]),
+                boxShadow: const [BoxShadow(color: Color(0x6600F0FF), blurRadius: 10)],
+              ),
+              child: const Icon(Icons.sports_esports_rounded, color: Color(0xFF030712), size: 22),
+            ),
+            const SizedBox(width: 12),
+            const Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('ABOUT DEVELOPER', style: TextStyle(color: Color(0xFF00F0FF), fontSize: 13, fontWeight: FontWeight.w900, letterSpacing: 1)),
+                Text('Virtual Gaming Controller', style: TextStyle(color: Color(0xFF94A3B8), fontSize: 10)),
+              ],
+            ),
+          ],
+        ),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF1E293B).withValues(alpha: 0.6),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: Colors.white10),
+                ),
+                child: const Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      '👋 Warm Greetings!',
+                      style: TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold),
+                    ),
+                    SizedBox(height: 6),
+                    Text(
+                      'Welcome to Virtual Gaming Controller! This app provides low-latency simulator input with precision steering and cockpit controls.',
+                      style: TextStyle(color: Color(0xFFCBD5E1), fontSize: 11, height: 1.4),
+                    ),
+                    SizedBox(height: 8),
+                    Divider(color: Colors.white12, height: 12),
+                    Text(
+                      'Created with passion by Ashish Shetty — a software engineer passionate about real-time systems, gaming hardware emulation, and fluid user experiences.',
+                      style: TextStyle(color: Color(0xFF94A3B8), fontSize: 10.5, height: 1.4),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 16),
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton.icon(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF00F0FF),
+                    foregroundColor: const Color(0xFF030712),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                    padding: const EdgeInsets.symmetric(vertical: 10),
+                  ),
+                  onPressed: () => _launchExternalUrl('https://ashishshetty.in/'),
+                  icon: const Icon(Icons.language_rounded, size: 16),
+                  label: const Text('PERSONAL WEBPAGE', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11, letterSpacing: 0.5)),
+                ),
+              ),
+              const SizedBox(height: 8),
+              SizedBox(
+                width: double.infinity,
+                child: OutlinedButton.icon(
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: Colors.white,
+                    side: const BorderSide(color: Color(0xFF00F0FF), width: 1.2),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                    padding: const EdgeInsets.symmetric(vertical: 10),
+                  ),
+                  onPressed: () => _launchExternalUrl('https://github.com/Shetty073/'),
+                  icon: const Icon(Icons.code_rounded, size: 16, color: Color(0xFF00F0FF)),
+                  label: const Text('GITHUB PROFILE', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11, letterSpacing: 0.5)),
+                ),
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(),
+            child: const Text('CLOSE', style: TextStyle(color: Color(0xFF94A3B8), fontWeight: FontWeight.bold, fontSize: 11)),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -299,6 +413,14 @@ class _HomeScreenState extends State<HomeScreen> {
           ),
         ),
         centerTitle: true,
+        actions: [
+          IconButton(
+            tooltip: 'About Developer',
+            icon: const Icon(Icons.info_outline_rounded, color: Color(0xFF00F0FF), size: 22),
+            onPressed: _showAboutDialog,
+          ),
+          const SizedBox(width: 4),
+        ],
       ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(20.0),
