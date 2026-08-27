@@ -1,0 +1,49 @@
+{
+  "name": "desktop-companion",
+  "version": "1.0.0",
+  "description": "Virtual Gaming Controller - Desktop Companion Engine & HUD",
+  "main": "dist/electron-main.js",
+  "scripts": {
+    "build:ui": "vite build",
+    "build:server": "tsc",
+    "build": "npm run build:ui && npm run build:server",
+    "start": "npm run build && electron .",
+    "start:server-only": "node dist/server.js",
+    "dev": "concurrently \"vite\" \"ts-node src/server.ts\" \"electron .\""
+  },
+  "keywords": [
+    "ets2",
+    "controller",
+    "virtual-joystick",
+    "simulator",
+    "gaming"
+  ],
+  "author": "Antigravity",
+  "license": "ISC",
+  "dependencies": {
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.7",
+    "express": "^4.21.2",
+    "lucide-react": "^0.475.0",
+    "qrcode": "^1.5.4",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
+    "ws": "^8.18.0"
+  },
+  "devDependencies": {
+    "@types/cors": "^2.8.17",
+    "@types/express": "^5.0.0",
+    "@types/node": "^22.13.4",
+    "@types/qrcode": "^1.5.5",
+    "@types/react": "^19.0.10",
+    "@types/react-dom": "^19.0.4",
+    "@types/ws": "^8.5.14",
+    "@vitejs/plugin-react": "^4.3.4",
+    "concurrently": "^9.1.2",
+    "electron": "^44.0.0",
+    "electron-builder": "^26.15.3",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.7.3",
+    "vite": "^6.1.1"
+  }
+}

@@ -1,0 +1,13 @@
+{
+  "name": "virtual-gaming-controller",
+  "version": "1.0.0",
+  "description": "Virtual Gaming Controller - Root Ecosystem",
+  "scripts": {
+    "build": "cd desktop-companion && npm run build",
+    "start": "cd desktop-companion && npm start",
+    "start:desktop": "cd desktop-companion && npm start",
+    "start:server-only": "cd desktop-companion && npm run start:server-only",
+    "mobile:run": "cd mobile-controller && flutter run",
+    "mobile:test": "cd mobile-controller && flutter test"
+  }
+}

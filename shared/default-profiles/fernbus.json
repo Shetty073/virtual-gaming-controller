@@ -1,0 +1,35 @@
+{
+  "id": "fernbus-default",
+  "name": "Fernbus Coach Simulator",
+  "description": "Realistic bus layout with door controls, passenger lights, retarder, and kneeling.",
+  "steering": {
+    "leftKey": "A",
+    "rightKey": "D",
+    "sensitivity": 1.0,
+    "deadzone": 0.05,
+    "linearity": 1.2
+  },
+  "pedals": {
+    "throttleKey": "W",
+    "brakeKey": "S",
+    "progressivePressure": true
+  },
+  "buttons": [
+    { "id": "btn_engine", "label": "ENGINE", "key": "E", "type": "toggle", "icon": "power_settings_new", "category": "drivetrain" },
+    { "id": "btn_handbrake", "label": "PARK BRAKE", "key": "SPACE", "type": "toggle", "icon": "pan_tool", "category": "drivetrain" },
+    { "id": "btn_blinker_l", "label": "LEFT BLINKER", "key": "[", "type": "toggle", "icon": "arrow_back", "category": "lighting" },
+    { "id": "btn_blinker_r", "label": "RIGHT BLINKER", "key": "]", "type": "toggle", "icon": "arrow_forward", "category": "lighting" },
+    { "id": "btn_hazard", "label": "HAZARD", "key": "F", "type": "toggle", "icon": "warning", "category": "lighting" },
+    { "id": "btn_lights", "label": "LIGHTS", "key": "L", "type": "multi_stage", "icon": "wb_incandescent", "category": "lighting", "maxStages": 3 },
+    { "id": "btn_highbeam", "label": "HIGH BEAM", "key": "K", "type": "toggle", "icon": "highlight", "category": "lighting" },
+    { "id": "btn_door_front", "label": "FRONT DOOR", "key": "1", "type": "toggle", "icon": "meeting_room", "category": "coach" },
+    { "id": "btn_door_rear", "label": "REAR DOOR", "key": "2", "type": "toggle", "icon": "door_sliding", "category": "coach" },
+    { "id": "btn_passenger_light", "label": "CABIN LIGHT", "key": "8", "type": "multi_stage", "icon": "light_mode", "category": "coach", "maxStages": 3 },
+    { "id": "btn_wipers", "label": "WIPERS", "key": "P", "type": "multi_stage", "icon": "water_drop", "category": "coach", "maxStages": 3 },
+    { "id": "btn_retarder_up", "label": "RETARDER +", "key": ";", "type": "momentary", "icon": "add_circle_outline", "category": "drivetrain" },
+    { "id": "btn_retarder_dn", "label": "RETARDER -", "key": "'", "type": "momentary", "icon": "remove_circle_outline", "category": "drivetrain" },
+    { "id": "btn_kneeling", "label": "KNEELING", "key": "K", "type": "toggle", "icon": "airline_seat_recline_extra", "category": "coach" },
+    { "id": "btn_horn", "label": "HORN", "key": "H", "type": "momentary", "icon": "volume_up", "category": "audio" },
+    { "id": "btn_luggage", "label": "LUGGAGE HATCH", "key": "3", "type": "toggle", "icon": "luggage", "category": "coach" }
+  ]
+}
