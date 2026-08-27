@@ -1,0 +1,172 @@
+# ==========================================
+# Operating System & System Files
+# ==========================================
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+[Dd]esktop.ini
+$RECYCLE.BIN/
+Icon?
+
+# ==========================================
+# IDE, Editors & Development Tools
+# ==========================================
+.idea/
+*.iml
+*.ipr
+*.iws
+.project
+.classpath
+.settings/
+.vscode/*
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+!.vscode/extensions.json
+*.sublime-project
+*.sublime-workspace
+*.swp
+*.swo
+*.swn
+*~
+*.bak
+*.orig
+.history/
+.ionide/
+
+# ==========================================
+# Node.js / TypeScript / Vite / Web
+# ==========================================
+node_modules/
+**/node_modules/
+node_modules
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+.pnpm-debug.log*
+
+# Node build artifacts
+dist/
+**/dist/
+dist-ssr/
+build/
+out/
+release/
+*.tsbuildinfo
+.vite/
+.eslintcache
+.stylelintcache
+.turbo/
+.parcel-cache/
+.next/
+.nuxt/
+
+# Electron packaging & installers
+**/dist-electron/
+**/win-unpacked/
+**/mac/
+**/linux-unpacked/
+*.exe.blockmap
+*.zip
+*.dmg
+*.AppImage
+*.deb
+*.rpm
+
+# ==========================================
+# Flutter & Dart (Mobile Controller)
+# ==========================================
+.dart_tool/
+**/.dart_tool/
+.packages
+.pub-cache/
+.pub/
+pubspec.lock
+.flutter-plugins
+.flutter-plugins-dependencies
+
+# Flutter & Android Build Artifacts
+**/build/
+android/app/build/
+android/.gradle/
+**/.gradle/
+local.properties
+key.properties
+*.keystore
+*.jks
+captures/
+.externalNativeBuild/
+.cxx/
+**/generated/
+
+# iOS / macOS build artifacts
+ios/.symlinks/
+ios/Pods/
+ios/Podfile.lock
+ios/Flutter/Generated.xcconfig
+ios/Flutter/flutter_export_environment.sh
+macos/Flutter/ephemeral/
+macos/Pods/
+macos/Podfile.lock
+*.ipa
+*.app
+
+# ==========================================
+# C / C++ / Native Build Artifacts (vJoy / ViGEm)
+# ==========================================
+*.obj
+*.o
+*.lib
+*.a
+*.exp
+*.pdb
+*.ilk
+*.pch
+*.idb
+*.tlog
+*.log
+x64/
+x86/
+ARM/
+ARM64/
+Debug/
+Release/
+ipch/
+*.vcxproj.user
+*.vcxproj.filters
+*.ncb
+*.suo
+*.sdf
+CMakeCache.txt
+CMakeFiles/
+cmake_install.cmake
+Makefile
+
+# ==========================================
+# Environment Variables & Secrets
+# ==========================================
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.crt
+*.p12
+
+# ==========================================
+# Temporary Files, Logs & Diagnostics
+# ==========================================
+logs/
+*.log
+scratch/
+tmp/
+temp/
+coverage/
+.nyc_output/
+.cache/
