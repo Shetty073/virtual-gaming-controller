@@ -7,6 +7,7 @@ class SteeringWheel extends StatefulWidget {
   final double size;
   final int degreesOfRotation; // e.g. 180, 270, 540, 900, 1080
   final bool isBusDesign;
+  final bool autoCenter;
 
   const SteeringWheel({
     super.key,
@@ -15,6 +16,7 @@ class SteeringWheel extends StatefulWidget {
     this.size = 210,
     this.degreesOfRotation = 900,
     this.isBusDesign = true,
+    this.autoCenter = true,
   });
 
   @override
@@ -23,6 +25,8 @@ class SteeringWheel extends StatefulWidget {
 
 class _SteeringWheelState extends State<SteeringWheel> with SingleTickerProviderStateMixin {
   double _currentTurnRad = 0.0;
+  Offset? _lastPanPos;
+  bool _isInteracting = false;
   late AnimationController _springController;
   late Animation<double> _springAnimation;
 
@@ -31,6 +35,7 @@ class _SteeringWheelState extends State<SteeringWheel> with SingleTickerProvider
   @override
   void initState() {
     super.initState();
+    _currentTurnRad = (widget.currentAngle * _maxRad).clamp(-_maxRad, _maxRad);
     _springController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 260),
@@ -39,9 +44,17 @@ class _SteeringWheelState extends State<SteeringWheel> with SingleTickerProvider
       setState(() {
         _currentTurnRad = _springAnimation.value;
       });
-      final normalized = (_currentTurnRad / _maxRad).clamp(-1.0, 1.0);
+      final normalized = _maxRad > 0 ? (_currentTurnRad / _maxRad).clamp(-1.0, 1.0) : 0.0;
       widget.onAngleChanged(normalized);
     });
+  }
+
+  @override
+  void didUpdateWidget(covariant SteeringWheel oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (!_isInteracting && !_springController.isAnimating) {
+      _currentTurnRad = (widget.currentAngle * _maxRad).clamp(-_maxRad, _maxRad);
+    }
   }
 
   @override
@@ -50,30 +63,76 @@ class _SteeringWheelState extends State<SteeringWheel> with SingleTickerProvider
     super.dispose();
   }
 
+  void _onPanStart(DragStartDetails details) {
+    if (_springController.isAnimating) {
+      _springController.stop();
+    }
+    _isInteracting = true;
+    _currentTurnRad = (widget.currentAngle * _maxRad).clamp(-_maxRad, _maxRad);
+    _lastPanPos = details.localPosition;
+  }
+
   void _onPanUpdate(DragUpdateDetails details) {
-    if (_springController.isAnimating) _springController.stop();
+    if (_springController.isAnimating) {
+      _springController.stop();
+    }
+    _isInteracting = true;
 
-    final dx = details.delta.dx;
-    final deltaRad = (dx / (widget.size / 2)) * 1.8;
+    final currentPos = details.localPosition;
+    if (_lastPanPos == null) {
+      _lastPanPos = currentPos;
+      return;
+    }
 
-    setState(() {
-      _currentTurnRad = (_currentTurnRad + deltaRad).clamp(-_maxRad, _maxRad);
-    });
+    final center = Offset(widget.size / 2.0, widget.size / 2.0);
+    final v1 = _lastPanPos! - center;
+    final v2 = currentPos - center;
+    _lastPanPos = currentPos;
 
-    final normalized = (_currentTurnRad / _maxRad).clamp(-1.0, 1.0);
-    widget.onAngleChanged(normalized);
+    // Minimum radius threshold (10px) to prevent sensitivity or jitter near center hub
+    if (v1.distance >= 10.0 && v2.distance >= 10.0) {
+      // Direct 2D cross and dot products compute exact signed angular delta
+      final cross = v1.dx * v2.dy - v1.dy * v2.dx;
+      final dot = v1.dx * v2.dx + v1.dy * v2.dy;
+      final deltaAngle = math.atan2(cross, dot);
+
+      // Guard against anomalous single-frame touch teleports through center
+      if (deltaAngle.abs() < (math.pi * 0.75)) {
+        setState(() {
+          _currentTurnRad = (_currentTurnRad + deltaAngle).clamp(-_maxRad, _maxRad);
+        });
+
+        final normalized = _maxRad > 0 ? (_currentTurnRad / _maxRad).clamp(-1.0, 1.0) : 0.0;
+        widget.onAngleChanged(normalized);
+      }
+    }
   }
 
   void _onPanEnd(DragEndDetails details) {
-    _springAnimation = Tween<double>(begin: _currentTurnRad, end: 0.0).animate(
-      CurvedAnimation(parent: _springController, curve: Curves.easeOutCubic),
-    );
-    _springController.forward(from: 0.0);
+    _isInteracting = false;
+    _lastPanPos = null;
+    if (widget.autoCenter) {
+      _springAnimation = Tween<double>(begin: _currentTurnRad, end: 0.0).animate(
+        CurvedAnimation(parent: _springController, curve: Curves.easeOutCubic),
+      );
+      _springController.forward(from: 0.0);
+    }
+  }
+
+  void _onPanCancel() {
+    _isInteracting = false;
+    _lastPanPos = null;
+    if (widget.autoCenter) {
+      _springAnimation = Tween<double>(begin: _currentTurnRad, end: 0.0).animate(
+        CurvedAnimation(parent: _springController, curve: Curves.easeOutCubic),
+      );
+      _springController.forward(from: 0.0);
+    }
   }
 
   @override
   Widget build(BuildContext context) {
-    final displayRad = _springController.isAnimating 
+    final displayRad = (_isInteracting || _springController.isAnimating)
         ? _currentTurnRad 
         : (widget.currentAngle * _maxRad);
 
@@ -85,8 +144,11 @@ class _SteeringWheelState extends State<SteeringWheel> with SingleTickerProvider
       mainAxisAlignment: MainAxisAlignment.center,
       children: [
         GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onPanStart: _onPanStart,
           onPanUpdate: _onPanUpdate,
           onPanEnd: _onPanEnd,
+          onPanCancel: _onPanCancel,
           child: Container(
             width: widget.size,
             height: widget.size,

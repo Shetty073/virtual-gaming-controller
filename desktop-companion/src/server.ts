@@ -40,9 +40,28 @@ export class CompanionServer {
 
   private cleanupInterval: NodeJS.Timeout | null = null;
 
+  private getProfilesDirectory(): string {
+    const candidates = [
+      (process as any).resourcesPath ? path.join((process as any).resourcesPath, 'default-profiles') : '',
+      path.resolve(__dirname, 'default-profiles'),
+      path.resolve(__dirname, '../default-profiles'),
+      path.resolve(__dirname, '../../shared/default-profiles'),
+      path.resolve(process.cwd(), 'shared/default-profiles'),
+      path.resolve(process.cwd(), '../shared/default-profiles')
+    ];
+
+    for (const dir of candidates) {
+      if (dir && fs.existsSync(dir)) {
+        return dir;
+      }
+    }
+    return path.resolve(__dirname, '../../shared/default-profiles');
+  }
+
   constructor() {
     // Load initial profile
-    const ets2ProfilePath = path.resolve(__dirname, '../../shared/default-profiles/ets2.json');
+    const profilesDir = this.getProfilesDirectory();
+    const ets2ProfilePath = path.join(profilesDir, 'ets2.json');
     try {
       this.activeProfile = JSON.parse(fs.readFileSync(ets2ProfilePath, 'utf8'));
     } catch (e) {
@@ -76,6 +95,23 @@ export class CompanionServer {
     this.setupUdpListener();
   }
 
+  private resolveViGEmInstallerPath(): string {
+    const candidates = [
+      (process as any).resourcesPath ? path.join((process as any).resourcesPath, 'drivers', 'ViGEmBusSetup.exe') : '',
+      path.resolve(__dirname, '..', 'drivers', 'ViGEmBusSetup.exe'),
+      path.resolve(__dirname, 'drivers', 'ViGEmBusSetup.exe'),
+      path.resolve(process.cwd(), 'drivers', 'ViGEmBusSetup.exe'),
+      path.resolve(process.cwd(), 'desktop-companion', 'drivers', 'ViGEmBusSetup.exe')
+    ].filter(p => !!p);
+
+    for (const p of candidates) {
+      if (fs.existsSync(p)) {
+        return p;
+      }
+    }
+    return '';
+  }
+
   private setupRoutes() {
     this.app.get('/api/status', (_req, res) => {
       res.json({
@@ -86,8 +122,56 @@ export class CompanionServer {
         httpPort: this.httpPort,
         ips: this.beacon.getLocalIps(),
         activeProfile: this.activeProfile,
-        connectedDevices: this.clientSessions.size
+        connectedDevices: this.clientSessions.size,
+        driverMode: this.emulator.driverMode,
+        isDriverInstalled: this.emulator.isDriverInstalled,
+        emulatorStatus: this.emulator.getStatus()
       });
+    });
+
+    this.app.get('/api/driver/status', (_req, res) => {
+      res.json({
+        driverMode: this.emulator.driverMode,
+        isDriverInstalled: this.emulator.isDriverInstalled,
+        info: this.emulator.isDriverInstalled
+          ? 'ViGEmBus Virtual Gamepad Driver is detected and active. Windows games will recognize this device as "Controller (Xbox 360 For Windows)".'
+          : 'ViGEmBus Driver not installed. High-performance Direct Simulation Mode is active with genuine DirectInput hardware scancodes.'
+      });
+    });
+
+    this.app.post('/api/driver/recheck', (_req, res) => {
+      const isInstalled = this.emulator.recheckDriver();
+      res.json({
+        success: true,
+        isDriverInstalled: isInstalled,
+        driverMode: this.emulator.driverMode
+      });
+    });
+
+    this.app.post('/api/driver/install', (_req, res) => {
+      try {
+        const installerPath = this.resolveViGEmInstallerPath();
+        const { exec } = require('child_process');
+        if (installerPath && fs.existsSync(installerPath)) {
+          const cmd = `powershell -NoProfile -Command "Start-Process -FilePath '${installerPath.replace(/'/g, "''")}' -Verb RunAs"`;
+          exec(cmd, (err: any) => {
+            if (err) {
+              console.warn('[Server] UAC launch error, falling back to direct start:', err);
+              exec(`start "" "${installerPath}"`);
+            }
+          });
+          res.json({
+            success: true,
+            launched: true,
+            message: 'ViGEmBus installer launched. Please accept the Windows administrator prompt to complete installation.'
+          });
+        } else {
+          exec('start https://github.com/nefarius/ViGEmBus/releases/latest');
+          res.json({ success: true, launched: false, message: 'Opening ViGEmBus driver release page in browser.' });
+        }
+      } catch (e: any) {
+        res.status(500).json({ error: e.message });
+      }
     });
 
     this.app.post('/api/server/toggle', async (req, res) => {
@@ -122,12 +206,15 @@ export class CompanionServer {
 
     this.app.get('/api/profiles', (_req, res) => {
       try {
-        const profilesDir = path.resolve(__dirname, '../../shared/default-profiles');
-        const files = fs.readdirSync(profilesDir).filter(f => f.endsWith('.json'));
-        const profiles = files.map(f => JSON.parse(fs.readFileSync(path.join(profilesDir, f), 'utf8')));
-        res.json(profiles);
+        const profilesDir = this.getProfilesDirectory();
+        if (fs.existsSync(profilesDir)) {
+          const files = fs.readdirSync(profilesDir).filter(f => f.endsWith('.json'));
+          const profiles = files.map(f => JSON.parse(fs.readFileSync(path.join(profilesDir, f), 'utf8')));
+          return res.json(profiles);
+        }
+        res.json([this.activeProfile]);
       } catch (err) {
-        res.status(500).json({ error: 'Failed to read profiles' });
+        res.json([this.activeProfile]);
       }
     });
 
@@ -269,7 +356,9 @@ export class CompanionServer {
       serverPort: this.udpPort,
       wsPort: this.httpPort,
       localIps: this.beacon.getLocalIps(),
-      isUdpRunning: this.isUdpRunning
+      isUdpRunning: this.isUdpRunning,
+      driverMode: this.emulator.driverMode,
+      isDriverInstalled: this.emulator.isDriverInstalled
     };
 
     const payload = JSON.stringify({ type: 'TELEMETRY_UPDATE', data: state });

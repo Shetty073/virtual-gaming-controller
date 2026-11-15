@@ -6,8 +6,10 @@
   "scripts": {
     "build:ui": "vite build",
     "build:server": "tsc",
-    "build": "npm run build:ui && npm run build:server",
-    "start": "npm run build && electron .",
+    "build:compile": "npm run build:ui && npm run build:server",
+    "build:package": "electron-builder --win",
+    "build": "npm run build:ui && npm run build:server && electron-builder --win",
+    "start": "npm run build:compile && electron .",
     "start:server-only": "node dist/server.js",
     "dev": "concurrently \"vite\" \"ts-node src/server.ts\" \"electron .\""
   },
@@ -45,5 +47,64 @@
     "ts-node": "^10.9.2",
     "typescript": "^5.7.3",
     "vite": "^6.1.1"
+  },
+  "build": {
+    "appId": "com.virtualgamingcontroller.companion",
+    "productName": "Virtual Gaming Controller",
+    "copyright": "Copyright © 2026 Ashish Shetty",
+    "asar": true,
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "dist/**/*",
+      "package.json"
+    ],
+    "extraResources": [
+      {
+        "from": "../shared/default-profiles",
+        "to": "default-profiles"
+      },
+      {
+        "from": "native",
+        "to": "native"
+      },
+      {
+        "from": "drivers",
+        "to": "drivers"
+      },
+      {
+        "from": "icon.png",
+        "to": "icon.png"
+      },
+      {
+        "from": "icon.ico",
+        "to": "icon.ico"
+      }
+    ],
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        },
+        {
+          "target": "portable",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "icon": "icon.ico"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "Virtual Gaming Controller"
+    }
   }
 }

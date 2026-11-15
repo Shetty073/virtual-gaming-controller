@@ -35,6 +35,7 @@ class _ControllerScreenState extends State<ControllerScreen> {
 
   int _selectedDegrees = 900;
   double _wheelSize = 200.0; // Dynamic resizable wheel (150px - 260px)
+  bool _autoCenterWheel = true;
   CockpitLayout _currentLayout = CockpitLayout.splitSides;
   bool _isEditingLayout = false;
 
@@ -216,6 +217,20 @@ class _ControllerScreenState extends State<ControllerScreen> {
                       },
                     );
                   }).toList(),
+                ),
+                const Divider(color: Color(0xFF334155), height: 20),
+                SwitchListTile(
+                  contentPadding: EdgeInsets.zero,
+                  dense: true,
+                  title: const Text('AUTO-CENTERING SPRING', style: TextStyle(color: Color(0xFF94A3B8), fontSize: 11, fontWeight: FontWeight.bold)),
+                  subtitle: const Text('Springs wheel back to 0° when touch is released', style: TextStyle(color: Color(0xFF64748B), fontSize: 10)),
+                  value: _autoCenterWheel,
+                  activeTrackColor: const Color(0xFF00F0FF).withValues(alpha: 0.5),
+                  activeThumbColor: const Color(0xFF00F0FF),
+                  onChanged: (v) {
+                    setModalState(() => _autoCenterWheel = v);
+                    setState(() => _autoCenterWheel = v);
+                  },
                 ),
               ],
             ),
@@ -458,6 +473,7 @@ class _ControllerScreenState extends State<ControllerScreen> {
       size: _wheelSize,
       degreesOfRotation: _selectedDegrees,
       isBusDesign: isFernbus,
+      autoCenter: _autoCenterWheel,
       onAngleChanged: (angle) {
         setState(() {
           _steer = angle;

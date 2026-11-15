@@ -74,6 +74,10 @@ export const App: React.FC = () => {
   const [testKeyFeedback, setTestKeyFeedback] = useState<string | null>(null);
   const [customUdpPort, setCustomUdpPort] = useState<number>(45455);
   const [saveSuccessMsg, setSaveSuccessMsg] = useState<string | null>(null);
+  const [driverStatus, setDriverStatus] = useState<{ driverMode: string; isDriverInstalled: boolean }>({
+    driverMode: 'Keyboard',
+    isDriverInstalled: false
+  });
 
   // Web Controller state
   const [webSteer, setWebSteer] = useState<number>(0);
@@ -104,6 +108,12 @@ export const App: React.FC = () => {
               if (data.currentInputs) setInputs(data.currentInputs);
               if (data.activeProfile) setActiveProfile(data.activeProfile);
               if (typeof data.isUdpRunning === 'boolean') setIsServerRunning(data.isUdpRunning);
+              if (data.driverMode) {
+                setDriverStatus({
+                  driverMode: data.driverMode,
+                  isDriverInstalled: !!data.isDriverInstalled
+                });
+              }
               if (data.serverPort) {
                 setCustomUdpPort(data.serverPort);
                 setServerInfo({
@@ -134,6 +144,19 @@ export const App: React.FC = () => {
         setProfiles(data);
         if (data.length > 0 && !activeProfile) {
           setActiveProfile(data[0]);
+        }
+      })
+      .catch(() => {});
+
+    // Fetch initial status and driver state
+    fetch(`http://${host}:45450/api/status`)
+      .then(res => res.json())
+      .then(data => {
+        if (data.driverMode) {
+          setDriverStatus({
+            driverMode: data.driverMode,
+            isDriverInstalled: !!data.isDriverInstalled
+          });
         }
       })
       .catch(() => {});
@@ -170,6 +193,52 @@ export const App: React.FC = () => {
       });
       const data = await res.json();
       setIsServerRunning(data.isUdpRunning);
+    } catch (_) {}
+  };
+
+  const [driverMsg, setDriverMsg] = useState<string | null>(null);
+  const [showEts2Guide, setShowEts2Guide] = useState<boolean>(false);
+
+  const handleInstallDriver = async () => {
+    const host = window.location.hostname || 'localhost';
+    try {
+      const res = await fetch(`http://${host}:45450/api/driver/install`, { method: 'POST' });
+      const data = await res.json();
+      setDriverMsg(data.message || 'Driver installer launched. Click "Detect Controller" once done.');
+      // Periodically recheck for automatic connection
+      const interval = setInterval(async () => {
+        try {
+          const checkRes = await fetch(`http://${host}:45450/api/driver/recheck`, { method: 'POST' });
+          const checkData = await checkRes.json();
+          if (checkData.isDriverInstalled) {
+            setDriverStatus({
+              driverMode: checkData.driverMode,
+              isDriverInstalled: true
+            });
+            setDriverMsg('Virtual Xbox 360 Controller connected!');
+            clearInterval(interval);
+          }
+        } catch (_) {}
+      }, 3000);
+      setTimeout(() => clearInterval(interval), 45000);
+    } catch (_) {
+      window.open('https://github.com/nefarius/ViGEmBus/releases/latest', '_blank');
+    }
+  };
+
+  const handleRecheckDriver = async () => {
+    const host = window.location.hostname || 'localhost';
+    try {
+      const checkRes = await fetch(`http://${host}:45450/api/driver/recheck`, { method: 'POST' });
+      const checkData = await checkRes.json();
+      setDriverStatus({
+        driverMode: checkData.driverMode,
+        isDriverInstalled: !!checkData.isDriverInstalled
+      });
+      setDriverMsg(checkData.isDriverInstalled
+        ? 'Xbox 360 Virtual Controller is active and connected!'
+        : 'ViGEmBus driver not yet detected. Run the installer to enable Xbox 360 controller emulation.');
+      setTimeout(() => setDriverMsg(null), 4000);
     } catch (_) {}
   };
 
@@ -307,7 +376,192 @@ export const App: React.FC = () => {
         {activeTab === 'dashboard' && (
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 340px', gap: '24px' }}>
             
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+
+              {/* Game Controller Detection & ETS 2 Status Banner */}
+              <div style={{
+                background: driverStatus.isDriverInstalled
+                  ? 'linear-gradient(90deg, rgba(0, 255, 102, 0.12), rgba(15, 23, 42, 0.8))'
+                  : 'linear-gradient(90deg, rgba(0, 240, 255, 0.12), rgba(15, 23, 42, 0.8))',
+                border: driverStatus.isDriverInstalled
+                  ? '1px solid rgba(0, 255, 102, 0.4)'
+                  : '1px solid rgba(0, 240, 255, 0.35)',
+                borderRadius: '16px',
+                padding: '16px 20px',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '12px'
+              }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '16px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
+                    <div style={{
+                      width: '38px',
+                      height: '38px',
+                      borderRadius: '10px',
+                      background: driverStatus.isDriverInstalled ? 'rgba(0, 255, 102, 0.2)' : 'rgba(0, 240, 255, 0.2)',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      color: driverStatus.isDriverInstalled ? '#00ff66' : '#00f0ff'
+                    }}>
+                      <Gamepad2 size={22} />
+                    </div>
+                    <div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                        <span style={{ fontSize: '14px', fontWeight: 800, color: '#ffffff', fontFamily: 'Orbitron, monospace' }}>
+                          {driverStatus.isDriverInstalled ? 'VIRTUAL XBOX 360 CONTROLLER (XINPUT)' : 'DIRECT INPUT SIMULATION (HARDWARE SCAN CODES)'}
+                        </span>
+                        <span style={{
+                          fontSize: '10px',
+                          padding: '2px 8px',
+                          borderRadius: '999px',
+                          fontWeight: 700,
+                          background: driverStatus.isDriverInstalled ? 'rgba(0, 255, 102, 0.2)' : 'rgba(0, 240, 255, 0.2)',
+                          color: driverStatus.isDriverInstalled ? '#00ff66' : '#00f0ff',
+                          border: driverStatus.isDriverInstalled ? '1px solid #00ff66' : '1px solid #00f0ff'
+                        }}>
+                          {driverStatus.isDriverInstalled ? 'XBOX 360 DETECTED' : 'DIRECTINPUT READY'}
+                        </span>
+                      </div>
+                      <p style={{ fontSize: '12px', color: '#94a3b8', marginTop: '3px' }}>
+                        {driverStatus.isDriverInstalled
+                          ? 'Steering, gas (RT) and brake (LT) feed analog controller axes. Dashboard buttons trigger keyboard keys simultaneously!'
+                          : 'Keyboard scan codes active. For analog Xbox 360 controller detection in ETS 2, install the ViGEm driver.'}
+                      </p>
+                    </div>
+                  </div>
+
+                  <div style={{ display: 'flex', gap: '8px' }}>
+                    <button
+                      onClick={() => setShowEts2Guide(!showEts2Guide)}
+                      style={{
+                        padding: '8px 14px',
+                        borderRadius: '8px',
+                        border: '1px solid rgba(255, 255, 255, 0.15)',
+                        background: showEts2Guide ? 'rgba(0, 240, 255, 0.25)' : 'rgba(30, 41, 59, 0.6)',
+                        color: showEts2Guide ? '#00f0ff' : '#cbd5e1',
+                        cursor: 'pointer',
+                        fontSize: '11px',
+                        fontWeight: 700,
+                        whiteSpace: 'nowrap'
+                      }}>
+                      {showEts2Guide ? 'Hide ETS 2 Setup' : 'ETS 2 Setup Guide'}
+                    </button>
+
+                    {!driverStatus.isDriverInstalled ? (
+                      <>
+                        <button
+                          onClick={handleInstallDriver}
+                          style={{
+                            padding: '8px 14px',
+                            borderRadius: '8px',
+                            border: '1px solid #00f0ff',
+                            background: 'rgba(0, 240, 255, 0.2)',
+                            color: '#00f0ff',
+                            cursor: 'pointer',
+                            fontSize: '11px',
+                            fontWeight: 700,
+                            whiteSpace: 'nowrap'
+                          }}>
+                          Install Xbox Controller Driver
+                        </button>
+                        <button
+                          onClick={handleRecheckDriver}
+                          style={{
+                            padding: '8px 12px',
+                            borderRadius: '8px',
+                            border: '1px solid rgba(255, 255, 255, 0.12)',
+                            background: 'rgba(30, 41, 59, 0.5)',
+                            color: '#94a3b8',
+                            cursor: 'pointer',
+                            fontSize: '11px',
+                            fontWeight: 600,
+                            whiteSpace: 'nowrap'
+                          }}>
+                          Detect Driver
+                        </button>
+                      </>
+                    ) : (
+                      <button
+                        onClick={handleRecheckDriver}
+                        style={{
+                          padding: '8px 12px',
+                          borderRadius: '8px',
+                          border: '1px solid rgba(0, 255, 102, 0.4)',
+                          background: 'rgba(0, 255, 102, 0.15)',
+                          color: '#00ff66',
+                          cursor: 'pointer',
+                          fontSize: '11px',
+                          fontWeight: 600,
+                          whiteSpace: 'nowrap'
+                        }}>
+                        Refresh
+                      </button>
+                    )}
+                  </div>
+                </div>
+
+                {driverMsg && (
+                  <div style={{
+                    fontSize: '11px',
+                    color: driverStatus.isDriverInstalled ? '#00ff66' : '#38bdf8',
+                    background: 'rgba(0, 0, 0, 0.25)',
+                    padding: '6px 12px',
+                    borderRadius: '6px'
+                  }}>
+                    {driverMsg}
+                  </div>
+                )}
+
+                {/* Interactive ETS 2 Guide */}
+                {showEts2Guide && (
+                  <div style={{
+                    background: 'rgba(11, 19, 36, 0.95)',
+                    border: '1px solid rgba(0, 240, 255, 0.3)',
+                    borderRadius: '12px',
+                    padding: '16px',
+                    marginTop: '4px'
+                  }}>
+                    <div style={{ fontSize: '13px', fontWeight: 800, color: '#00f0ff', fontFamily: 'Orbitron, monospace', marginBottom: '12px' }}>
+                      ETS 2 CONTROLLER & KEYBOARD HYBRID SETUP (RECOMMENDED)
+                    </div>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '12px' }}>
+                      <div style={{ background: 'rgba(30, 41, 59, 0.5)', padding: '12px', borderRadius: '8px' }}>
+                        <div style={{ color: '#38bdf8', fontWeight: 700, fontSize: '12px', marginBottom: '6px' }}>1. CONTROLS MENU</div>
+                        <div style={{ color: '#cbd5e1', fontSize: '11px', lineHeight: '1.6' }}>
+                          In ETS 2, open <b>Options ➔ Controls</b>.<br />
+                          Top dropdown: Select <b style={{ color: '#00ff66' }}>"Keyboard + Controller (Xbox 360 For Windows)"</b>.<br />
+                          Subtype: Set to <b style={{ color: '#00f0ff' }}>Wheel</b> (for 1:1 direct steering) or <b>Gamepad</b>.
+                        </div>
+                      </div>
+
+                      <div style={{ background: 'rgba(30, 41, 59, 0.5)', padding: '12px', borderRadius: '8px' }}>
+                        <div style={{ color: '#38bdf8', fontWeight: 700, fontSize: '12px', marginBottom: '6px' }}>2. AXIS ASSIGNMENT</div>
+                        <div style={{ color: '#cbd5e1', fontSize: '11px', lineHeight: '1.6' }}>
+                          <b>Steering Axis:</b> Click and rotate phone wheel ➔ <span style={{ color: '#00ff66' }}>Joy Left X-Axis</span><br />
+                          <b>Acceleration Axis:</b> Click and press gas pedal ➔ <span style={{ color: '#00ff66' }}>Joy Right Trigger (RT)</span><br />
+                          <b>Brake Axis:</b> Click and press brake pedal ➔ <span style={{ color: '#00ff66' }}>Joy Left Trigger (LT)</span>
+                        </div>
+                      </div>
+
+                      <div style={{ background: 'rgba(30, 41, 59, 0.5)', padding: '12px', borderRadius: '8px' }}>
+                        <div style={{ color: '#38bdf8', fontWeight: 700, fontSize: '12px', marginBottom: '6px' }}>3. LINEARITY & DEADZONE</div>
+                        <div style={{ color: '#cbd5e1', fontSize: '11px', lineHeight: '1.6' }}>
+                          Set <b>Steering Deadzone</b> to <b>0%</b>.<br />
+                          Set <b>Steering Linearity</b> slider to the far left (linear 1:1 rotation matching the mobile steering wheel).
+                        </div>
+                      </div>
+
+                      <div style={{ background: 'rgba(30, 41, 59, 0.5)', padding: '12px', borderRadius: '8px' }}>
+                        <div style={{ color: '#38bdf8', fontWeight: 700, fontSize: '12px', marginBottom: '6px' }}>4. TRUCK BUTTONS (KEYBOARD)</div>
+                        <div style={{ color: '#cbd5e1', fontSize: '11px', lineHeight: '1.6' }}>
+                          All dashboard buttons on the phone (Engine <span style={{ color: '#00f0ff' }}>[E]</span>, Lights <span style={{ color: '#00f0ff' }}>[L]</span>, Wipers <span style={{ color: '#00f0ff' }}>[P]</span>, Blinkers <span style={{ color: '#00f0ff' }}>[ / ]</span>, Horn <span style={{ color: '#00f0ff' }}>[H]</span>, Park Brake <span style={{ color: '#00f0ff' }}>[SPACE]</span>) trigger ETS 2 default keys automatically alongside controller steering!
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
               
               {/* Profile Bar */}
               <div style={{ background: 'rgba(15, 23, 42, 0.7)', border: '1px solid rgba(0, 240, 255, 0.25)', borderRadius: '16px', padding: '18px 24px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -447,20 +701,67 @@ export const App: React.FC = () => {
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: '18px' }}>
               <div>
-                <label style={{ display: 'block', fontSize: '12px', fontWeight: 700, color: '#94a3b8', marginBottom: '6px' }}>VIRTUAL CONTROLLER EMULATION MODE</label>
-                <div style={{ background: '#090d16', border: '1px solid rgba(0, 240, 255, 0.25)', borderRadius: '10px', padding: '14px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                <label style={{ display: 'block', fontSize: '12px', fontWeight: 700, color: '#94a3b8', marginBottom: '6px' }}>VIRTUAL CONTROLLER & GAME DETECTION STATUS</label>
+                <div style={{ background: '#090d16', border: '1px solid rgba(0, 240, 255, 0.25)', borderRadius: '10px', padding: '16px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <span style={{ fontSize: '13px', fontWeight: 700, color: '#38bdf8' }}>🎮 Direct Simulation & Gamepad Mapping</span>
-                    <span style={{ fontSize: '11px', background: 'rgba(0, 255, 102, 0.15)', color: '#00ff66', padding: '2px 8px', borderRadius: '4px', fontWeight: 700 }}>ACTIVE</span>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <span style={{ fontSize: '14px', fontWeight: 700, color: '#38bdf8' }}>
+                        {driverStatus.isDriverInstalled ? '🎮 ViGEm Virtual Xbox 360 Controller' : '⚡ DirectInput Hardware Scancode Engine'}
+                      </span>
+                    </div>
+                    <span style={{ fontSize: '11px', background: driverStatus.isDriverInstalled ? 'rgba(0, 255, 102, 0.15)' : 'rgba(0, 240, 255, 0.15)', color: driverStatus.isDriverInstalled ? '#00ff66' : '#00f0ff', padding: '3px 10px', borderRadius: '4px', fontWeight: 700 }}>
+                      {driverStatus.isDriverInstalled ? 'VIRTUAL GAMEPAD ACTIVE' : 'DIRECT SIMULATION ACTIVE'}
+                    </span>
                   </div>
-                  <p style={{ fontSize: '12px', color: '#94a3b8' }}>
-                    Emulates full steering axes and cockpit buttons directly into Euro Truck Simulator 2 / ATS without requiring manual calibration.
+
+                  <p style={{ fontSize: '12px', color: '#94a3b8', lineHeight: '1.6' }}>
+                    {driverStatus.isDriverInstalled
+                      ? 'ViGEmBus driver is active. Games like Euro Truck Simulator 2, ATS, and Assetto Corsa will detect your phone as a native "Controller (Xbox 360 For Windows)" with full analog steering and pedal axes.'
+                      : 'Emulates genuine DirectInput hardware scancodes directly into ETS2 / ATS game loops without needing third-party drivers. Keystrokes, pedals, and cockpit buttons are processed with zero latency.'}
                   </p>
-                  <div style={{ fontSize: '11px', color: '#64748b', marginTop: '4px' }}>
-                    • Steering Axis: <code>Left [A] / Right [D]</code> (Pulse-Modulated or Continuous Axis)<br />
-                    • Pedals: <code>Throttle [W] / Brake [S]</code><br />
-                    • Gamepad Device Name in ETS2: <strong>Virtual Gaming Controller</strong>
+
+                  <div style={{ background: 'rgba(15, 23, 42, 0.7)', borderRadius: '8px', padding: '12px', border: '1px solid rgba(255,255,255,0.06)' }}>
+                    <div style={{ fontSize: '12px', fontWeight: 700, color: '#38bdf8', marginBottom: '6px' }}>
+                      HOW TO CONFIGURE IN EURO TRUCK SIMULATOR 2 (ETS 2):
+                    </div>
+                    <div style={{ fontSize: '11px', color: '#cbd5e1', lineHeight: '1.7' }}>
+                      {driverStatus.isDriverInstalled ? (
+                        <>
+                          1. Open ETS 2 ➔ <strong>Options</strong> ➔ <strong>Controls</strong>.<br />
+                          2. Set Input Device to: <strong>"Keyboard + Controller (Xbox 360 For Windows)"</strong>.<br />
+                          3. Set Controller Subtype to: <strong>"Steering Wheel"</strong> or <strong>"Gamepad"</strong>.<br />
+                          4. Steering Axis, Accelerator, and Brake will automatically map to your phone wheel and pedals!
+                        </>
+                      ) : (
+                        <>
+                          1. Open ETS 2 ➔ <strong>Options</strong> ➔ <strong>Controls</strong>.<br />
+                          2. Set Input Device to: <strong>"Keyboard only"</strong> (or "Keyboard + Mouse Steering").<br />
+                          3. Steering (A / D), Pedals (W / S), and all Cockpit Buttons match ETS2 defaults out of the box!<br />
+                          4. (Optional) For analog gamepad axis detection in ETS2 dropdown, click "Install ViGEmBus Driver" below.
+                        </>
+                      )}
+                    </div>
                   </div>
+
+                  {!driverStatus.isDriverInstalled && (
+                    <div style={{ marginTop: '4px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                      <span style={{ fontSize: '11px', color: '#64748b' }}>Want ETS 2 to list a dedicated Xbox 360 Gamepad device?</span>
+                      <button
+                        onClick={handleInstallDriver}
+                        style={{
+                          padding: '6px 14px',
+                          borderRadius: '6px',
+                          border: '1px solid #00f0ff',
+                          background: 'rgba(0, 240, 255, 0.1)',
+                          color: '#00f0ff',
+                          cursor: 'pointer',
+                          fontSize: '11px',
+                          fontWeight: 700
+                        }}>
+                        Install ViGEmBus Driver
+                      </button>
+                    </div>
+                  )}
                 </div>
               </div>
 

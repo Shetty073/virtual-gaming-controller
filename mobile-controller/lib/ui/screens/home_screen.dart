@@ -20,10 +20,10 @@ class _HomeScreenState extends State<HomeScreen> {
   final TextEditingController _portController = TextEditingController(text: '45455');
   final AutoDiscoveryClient _discovery = AutoDiscoveryClient();
   
-  List<Map<String, dynamic>> _discoveredServers = [];
+  final List<Map<String, dynamic>> _discoveredServers = [];
   List<GameProfile> _availableProfiles = [];
   GameProfile? _selectedProfile;
-  bool _isSearching = true;
+  final bool _isSearching = true;
 
   @override
   void initState() {

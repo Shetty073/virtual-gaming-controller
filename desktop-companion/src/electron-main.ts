@@ -1,5 +1,6 @@
 import { app, BrowserWindow } from 'electron';
 import path from 'path';
+import fs from 'fs';
 import { companionServerInstance } from './server';
 
 let mainWindow: BrowserWindow | null = null;
@@ -10,8 +11,21 @@ function shutdownEverything() {
   } catch (_) {}
 }
 
+function getIconPath(): string {
+  const candidates = [
+    (process as any).resourcesPath ? path.join((process as any).resourcesPath, 'icon.png') : '',
+    path.resolve(__dirname, 'icon.png'),
+    path.resolve(__dirname, '../icon.png'),
+    path.resolve(process.cwd(), 'icon.png')
+  ];
+  for (const c of candidates) {
+    if (c && fs.existsSync(c)) return c;
+  }
+  return path.resolve(__dirname, '../icon.png');
+}
+
 function createWindow() {
-  const iconPath = path.resolve(__dirname, '../icon.png');
+  const iconPath = getIconPath();
 
   mainWindow = new BrowserWindow({
     width: 1280,
@@ -20,7 +34,7 @@ function createWindow() {
     minHeight: 700,
     title: 'Virtual Gaming Controller - Desktop Companion',
     backgroundColor: '#03070d',
-    icon: iconPath,
+    icon: fs.existsSync(iconPath) ? iconPath : undefined,
     autoHideMenuBar: true,
     webPreferences: {
       nodeIntegration: false,
