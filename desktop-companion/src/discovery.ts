@@ -16,10 +16,26 @@ export class DiscoveryBeacon {
   }
 
   public start(broadcastIntervalMs: number = 1000) {
+    if (this.socket) {
+      try {
+        this.socket.close();
+      } catch (_) {}
+    }
+    this.socket = dgram.createSocket({ type: 'udp4', reuseAddr: true });
+
+    this.socket.on('error', (err: any) => {
+      console.warn(`[Beacon] Broadcaster warning: ${err.message || err}`);
+    });
+
     this.socket.bind(0, () => {
-      this.socket.setBroadcast(true);
+      try {
+        this.socket.setBroadcast(true);
+      } catch (_) {}
       console.log('[Beacon] Discovery broadcaster initialized.');
       
+      if (this.timer) {
+        clearInterval(this.timer);
+      }
       this.timer = setInterval(() => {
         this.broadcast();
       }, broadcastIntervalMs);

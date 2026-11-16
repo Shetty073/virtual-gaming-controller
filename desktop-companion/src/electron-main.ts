@@ -42,10 +42,20 @@ function createWindow() {
     }
   });
 
-  const rendererIndexPath = path.resolve(__dirname, 'renderer/index.html');
-  mainWindow.loadFile(rendererIndexPath).catch(() => {
-    mainWindow?.loadURL('http://localhost:45450');
-  });
+  const isDev = !app.isPackaged;
+  if (isDev) {
+    mainWindow.loadURL('http://localhost:5173').catch(() => {
+      const rendererIndexPath = path.resolve(__dirname, 'renderer/index.html');
+      mainWindow?.loadFile(rendererIndexPath).catch(() => {
+        mainWindow?.loadURL('http://localhost:45450');
+      });
+    });
+  } else {
+    const rendererIndexPath = path.resolve(__dirname, 'renderer/index.html');
+    mainWindow.loadFile(rendererIndexPath).catch(() => {
+      mainWindow?.loadURL('http://localhost:45450');
+    });
+  }
 
   mainWindow.on('closed', () => {
     mainWindow = null;

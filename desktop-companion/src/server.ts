@@ -139,8 +139,8 @@ export class CompanionServer {
       });
     });
 
-    this.app.post('/api/driver/recheck', (_req, res) => {
-      const isInstalled = this.emulator.recheckDriver();
+    this.app.post('/api/driver/recheck', async (_req, res) => {
+      const isInstalled = await this.emulator.recheckDriver();
       res.json({
         success: true,
         isDriverInstalled: isInstalled,
@@ -150,20 +150,36 @@ export class CompanionServer {
 
     this.app.post('/api/driver/install', (_req, res) => {
       try {
-        const installerPath = this.resolveViGEmInstallerPath();
+        const nefconPath = 'C:\\Program Files\\Nefarius Software Solutions\\ViGEm Bus Driver\\nefconw.exe';
+        const infPath = 'C:\\Program Files\\Nefarius Software Solutions\\ViGEm Bus Driver\\ViGEmBus.inf';
         const { exec } = require('child_process');
+
+        // If ViGEm files are already installed on disk, activate the root device node directly
+        if (fs.existsSync(nefconPath) && fs.existsSync(infPath)) {
+          const activateCmd = `powershell -NoProfile -Command "Start-Process -FilePath 'cmd.exe' -ArgumentList '/c \\"${nefconPath}\\" --install-driver --inf-path \\"${infPath}\\" & \\"${nefconPath}\\" --create-device-node --hardware-id \\"Nefarius\\ViGEmBus\\Gen1\\" --class-name \\"System\\" --class-guid \\"{4D36E97D-E325-11CE-BFC1-08002BE10318}\\"' -Verb RunAs"`;
+          exec(activateCmd);
+          res.json({
+            success: true,
+            launched: true,
+            message: 'Activating ViGEmBus driver device. Please click "Yes" on the Windows Administrator prompt, then click "Detect Driver".'
+          });
+          return;
+        }
+
+        const installerPath = this.resolveViGEmInstallerPath();
         if (installerPath && fs.existsSync(installerPath)) {
-          const cmd = `powershell -NoProfile -Command "Start-Process -FilePath '${installerPath.replace(/'/g, "''")}' -Verb RunAs"`;
+          const cmd = `start "" "${installerPath}"`;
           exec(cmd, (err: any) => {
             if (err) {
-              console.warn('[Server] UAC launch error, falling back to direct start:', err);
-              exec(`start "" "${installerPath}"`);
+              console.warn('[Server] Direct start failed, trying PowerShell Start-Process:', err);
+              exec(`powershell -NoProfile -Command "Start-Process -FilePath '${installerPath.replace(/'/g, "''")}' -Verb RunAs"`);
             }
           });
           res.json({
             success: true,
             launched: true,
-            message: 'ViGEmBus installer launched. Please accept the Windows administrator prompt to complete installation.'
+            path: installerPath,
+            message: 'ViGEmBus installer launched! Accept the Windows administrator (UAC) prompt, finish the setup wizard, then click "Detect Driver".'
           });
         } else {
           exec('start https://github.com/nefarius/ViGEmBus/releases/latest');
@@ -329,6 +345,7 @@ export class CompanionServer {
   }
 
   public async startUdp() {
+    if (this.isUdpRunning) return;
     try {
       await this.udpServer.start();
       this.beacon.start(1000);
@@ -371,7 +388,18 @@ export class CompanionServer {
 
   public async startHttp(): Promise<void> {
     return new Promise((resolve) => {
+      this.server.once('error', (err: any) => {
+        if (err.code === 'EADDRINUSE') {
+          console.warn(`[Server] Port ${this.httpPort} is already bound by an existing companion instance.`);
+          resolve();
+        } else {
+          console.error('[Server] HTTP error:', err);
+          resolve();
+        }
+      });
+
       this.server.listen(this.httpPort, () => {
+        console.log(`[Server] HTTP server listening on http://localhost:${this.httpPort}`);
         resolve();
       });
     });

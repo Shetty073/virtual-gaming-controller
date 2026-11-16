@@ -3,22 +3,40 @@ import { ControllerPacket } from './types';
 import { InputEmulator } from './input-emulator';
 
 export class UdpServer {
-  private socket: dgram.Socket;
+  private socket: dgram.Socket | null = null;
   private port: number;
   private emulator: InputEmulator;
   private onPacketCallback?: (packet: ControllerPacket, rinfo: dgram.RemoteInfo) => void;
+  private isBound: boolean = false;
 
   constructor(port: number, emulator: InputEmulator) {
     this.port = port;
     this.emulator = emulator;
+  }
+
+  private createSocket() {
+    if (this.socket) {
+      try {
+        this.socket.close();
+      } catch (_) {}
+    }
     this.socket = dgram.createSocket({ type: 'udp4', reuseAddr: true });
     this.setupListeners();
   }
 
   private setupListeners() {
-    this.socket.on('error', (err) => {
-      console.error(`UDP Server error:\n${err.stack}`);
-      this.socket.close();
+    if (!this.socket) return;
+
+    this.socket.on('error', (err: any) => {
+      console.warn(`[UDP] Server warning/error: ${err.message || err}`);
+      if (err.code === 'EADDRINUSE') {
+        console.warn(`[UDP] Port ${this.port} is already bound.`);
+      }
+      this.isBound = false;
+      try {
+        this.socket?.close();
+      } catch (_) {}
+      this.socket = null;
     });
 
     this.socket.on('message', (msg: Buffer, rinfo: dgram.RemoteInfo) => {
@@ -87,16 +105,29 @@ export class UdpServer {
     });
 
     this.socket.on('listening', () => {
-      const address = this.socket.address();
-      console.log(`[UDP] Server listening on ${address.address}:${address.port}`);
+      if (this.socket) {
+        const address = this.socket.address();
+        console.log(`[UDP] Server listening on ${address.address}:${address.port}`);
+      }
     });
   }
 
   public start(): Promise<void> {
     return new Promise((resolve) => {
-      this.socket.bind(this.port, () => {
+      if (this.isBound && this.socket) {
         resolve();
-      });
+        return;
+      }
+      try {
+        this.createSocket();
+        this.socket!.bind(this.port, () => {
+          this.isBound = true;
+          resolve();
+        });
+      } catch (e: any) {
+        console.warn(`[UDP] Bind exception: ${e.message}`);
+        resolve();
+      }
     });
   }
 
@@ -105,8 +136,12 @@ export class UdpServer {
   }
 
   public stop() {
-    try {
-      this.socket.close();
-    } catch (_) {}
+    this.isBound = false;
+    if (this.socket) {
+      try {
+        this.socket.close();
+      } catch (_) {}
+      this.socket = null;
+    }
   }
 }

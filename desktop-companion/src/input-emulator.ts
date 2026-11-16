@@ -350,16 +350,51 @@ $initRes = [Win32API.WinGamingInput]::InitViGEm("${escapedDllPath}")
     }
   }
 
-  public recheckDriver(): boolean {
+  public async recheckDriver(): Promise<boolean> {
     if (!this.vigemDllPath) {
       this.vigemDllPath = this.resolveViGEmDllPath();
     }
     const escapedDllPath = this.vigemDllPath.replace(/\\/g, '\\\\');
-    this.sendCommand(`
+
+    return new Promise((resolve) => {
+      if (!this.workerProcess || !this.isReady) {
+        resolve(this.isDriverInstalled);
+        return;
+      }
+
+      const onData = (data: Buffer) => {
+        const out = data.toString();
+        if (out.includes('RECHECK_RESULT:True') || out.includes('VIGEM:True')) {
+          this.isDriverInstalled = true;
+          this.driverMode = 'ViGEm';
+          cleanup();
+          resolve(true);
+        } else if (out.includes('RECHECK_RESULT:False') || out.includes('VIGEM:False')) {
+          this.isDriverInstalled = false;
+          this.driverMode = 'Keyboard';
+          cleanup();
+          resolve(false);
+        }
+      };
+
+      const cleanup = () => {
+        if (this.workerProcess) {
+          this.workerProcess.stdout.removeListener('data', onData);
+        }
+        clearTimeout(timer);
+      };
+
+      const timer = setTimeout(() => {
+        cleanup();
+        resolve(this.isDriverInstalled);
+      }, 1500);
+
+      this.workerProcess.stdout.on('data', onData);
+      this.sendCommand(`
 $recheck = [Win32API.WinGamingInput]::InitViGEm("${escapedDllPath}")
-[Console]::Out.WriteLine("VIGEM:" + $recheck)
+[Console]::Out.WriteLine("RECHECK_RESULT:" + $recheck)
 `);
-    return this.isDriverInstalled;
+    });
   }
 
   private flushQueue() {

@@ -11,7 +11,7 @@
     "build": "npm run build:ui && npm run build:server && electron-builder --win",
     "start": "npm run build:compile && electron .",
     "start:server-only": "node dist/server.js",
-    "dev": "concurrently \"vite\" \"ts-node src/server.ts\" \"electron .\""
+    "dev": "npm run build:server && concurrently \"vite\" \"electron .\""
   },
   "keywords": [
     "ets2",
