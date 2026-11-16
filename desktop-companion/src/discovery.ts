@@ -45,18 +45,70 @@ export class DiscoveryBeacon {
 
   public getLocalIps(): string[] {
     const interfaces = os.networkInterfaces();
-    const ips: string[] = [];
+    const candidateIps: { ip: string; dev: string; priority: number; netmask: string }[] = [];
+
     for (const devName in interfaces) {
+      const lowerDev = devName.toLowerCase();
+      const isVirtual = lowerDev.includes('vethernet') ||
+                        lowerDev.includes('virtual') ||
+                        lowerDev.includes('vmware') ||
+                        lowerDev.includes('wsl') ||
+                        lowerDev.includes('hyper-v') ||
+                        lowerDev.includes('docker') ||
+                        lowerDev.includes('loopback') ||
+                        lowerDev.includes('tailscale') ||
+                        lowerDev.includes('zerotier');
+
       const iface = interfaces[devName];
       if (iface) {
         for (const alias of iface) {
           if (alias.family === 'IPv4' && !alias.internal) {
-            ips.push(alias.address);
+            const ip = alias.address;
+            let priority = 10;
+
+            // Prioritize standard home/office LAN subnets (192.168.x.x, 10.x.x.x)
+            if (ip.startsWith('192.168.')) priority += 60;
+            else if (ip.startsWith('10.')) priority += 40;
+
+            // Heavily deprioritize virtual adapters (e.g. Hyper-V vEthernet 172.x)
+            if (isVirtual) priority -= 150;
+            if (ip.startsWith('172.') && isVirtual) priority -= 100;
+            if (ip.startsWith('169.254.')) priority -= 250;
+
+            candidateIps.push({ ip, dev: devName, priority, netmask: alias.netmask || '255.255.255.0' });
           }
         }
       }
     }
-    return ips;
+
+    // Sort descending by priority so the physical Wi-Fi/Ethernet IP is always first
+    candidateIps.sort((a, b) => b.priority - a.priority);
+    return candidateIps.map(c => c.ip);
+  }
+
+  private getSubnetBroadcastAddresses(): string[] {
+    const interfaces = os.networkInterfaces();
+    const broadcastAddresses = new Set<string>(['255.255.255.255']);
+
+    for (const devName in interfaces) {
+      const iface = interfaces[devName];
+      if (iface) {
+        for (const alias of iface) {
+          if (alias.family === 'IPv4' && !alias.internal && alias.netmask) {
+            try {
+              const ipParts = alias.address.split('.').map(Number);
+              const maskParts = alias.netmask.split('.').map(Number);
+              if (ipParts.length === 4 && maskParts.length === 4) {
+                const bcast = ipParts.map((part, i) => (part | (~maskParts[i] & 255))).join('.');
+                broadcastAddresses.add(bcast);
+              }
+            } catch (_) {}
+          }
+        }
+      }
+    }
+
+    return Array.from(broadcastAddresses);
   }
 
   private broadcast() {
@@ -72,13 +124,17 @@ export class DiscoveryBeacon {
     });
 
     const payload = Buffer.from(message);
+    const targets = this.getSubnetBroadcastAddresses();
 
-    // Broadcast to 255.255.255.255 on port 45456 (Mobile Discovery Listen Port)
-    this.socket.send(payload, 0, payload.length, 45456, '255.255.255.255', (err) => {
-      if (err && (err as any).code !== 'EACCES') {
-        // Ignore expected ephemeral network broadcast warnings
-      }
-    });
+    for (const bcastTarget of targets) {
+      try {
+        this.socket?.send(payload, 0, payload.length, 45456, bcastTarget, (err) => {
+          if (err && (err as any).code !== 'EACCES') {
+            // Ignore expected ephemeral network broadcast warnings
+          }
+        });
+      } catch (_) {}
+    }
   }
 
   public stop() {

@@ -74,6 +74,7 @@ export const App: React.FC = () => {
   const [testKeyFeedback, setTestKeyFeedback] = useState<string | null>(null);
   const [customUdpPort, setCustomUdpPort] = useState<number>(45455);
   const [saveSuccessMsg, setSaveSuccessMsg] = useState<string | null>(null);
+  const [selectedIp, setSelectedIp] = useState<string>('');
   const [driverStatus, setDriverStatus] = useState<{ driverMode: string; isDriverInstalled: boolean }>({
     driverMode: 'Keyboard',
     isDriverInstalled: false
@@ -167,7 +168,7 @@ export const App: React.FC = () => {
   }, []);
 
   useEffect(() => {
-    const primaryIp = serverInfo.ips.find(ip => !ip.startsWith('127.')) || serverInfo.ips[0] || '127.0.0.1';
+    const primaryIp = selectedIp || serverInfo.ips.find(ip => !ip.startsWith('127.')) || serverInfo.ips[0] || '127.0.0.1';
     const connectionPayload = JSON.stringify({
       vgc: '1.0',
       ip: primaryIp,
@@ -181,7 +182,7 @@ export const App: React.FC = () => {
       color: { dark: '#00f0ff', light: '#090d16' },
       width: 220
     }).then(url => setQrDataUrl(url));
-  }, [serverInfo]);
+  }, [serverInfo, selectedIp]);
 
   const handleToggleServer = async () => {
     const host = window.location.hostname || 'localhost';
@@ -680,7 +681,32 @@ export const App: React.FC = () => {
               <div style={{ background: 'rgba(15, 23, 42, 0.7)', border: '1px solid rgba(255, 255, 255, 0.08)', borderRadius: '16px', padding: '20px', textAlign: 'center' }}>
                 <h3 style={{ fontSize: '13px', fontWeight: 700, marginBottom: '12px' }}>INSTANT PAIR</h3>
                 {qrDataUrl && <img src={qrDataUrl} alt="Pairing QR" style={{ width: '160px', height: '160px', margin: '0 auto', borderRadius: '10px', background: '#090d16', padding: '6px', border: '1px solid rgba(0,240,255,0.3)' }} />}
-                <p style={{ fontSize: '11px', color: '#94a3b8', marginTop: '8px' }}>{serverInfo.ips[0]}:{serverInfo.udpPort}</p>
+                <div style={{ marginTop: '10px' }}>
+                  <div style={{ fontSize: '13px', fontWeight: 700, color: '#00ff66', fontFamily: 'monospace' }}>
+                    {selectedIp || serverInfo.ips[0] || '127.0.0.1'}:{serverInfo.udpPort}
+                  </div>
+                  {serverInfo.ips.length > 1 && (
+                    <div style={{ marginTop: '8px', display: 'flex', justifyContent: 'center', gap: '6px', flexWrap: 'wrap' }}>
+                      {serverInfo.ips.map(ip => (
+                        <button
+                          key={ip}
+                          onClick={() => setSelectedIp(ip)}
+                          style={{
+                            fontSize: '10px',
+                            padding: '3px 8px',
+                            borderRadius: '6px',
+                            border: (selectedIp || serverInfo.ips[0]) === ip ? '1px solid #00ff66' : '1px solid rgba(255,255,255,0.1)',
+                            background: (selectedIp || serverInfo.ips[0]) === ip ? 'rgba(0, 255, 102, 0.15)' : 'rgba(30, 41, 59, 0.4)',
+                            color: (selectedIp || serverInfo.ips[0]) === ip ? '#00ff66' : '#94a3b8',
+                            cursor: 'pointer',
+                            fontWeight: (selectedIp || serverInfo.ips[0]) === ip ? 700 : 400
+                          }}>
+                          {ip}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
               </div>
             </div>
 

@@ -16,7 +16,9 @@ export class CompanionServer {
 
   private app: express.Express;
   private server: http.Server;
+  private secondaryServer: http.Server | null = null;
   private wss: WebSocketServer;
+  private secondaryWss: WebSocketServer | null = null;
   private emulator: InputEmulator;
   private udpServer: UdpServer;
   private beacon: DiscoveryBeacon;
@@ -150,36 +152,38 @@ export class CompanionServer {
 
     this.app.post('/api/driver/install', (_req, res) => {
       try {
-        const nefconPath = 'C:\\Program Files\\Nefarius Software Solutions\\ViGEm Bus Driver\\nefconw.exe';
-        const infPath = 'C:\\Program Files\\Nefarius Software Solutions\\ViGEm Bus Driver\\ViGEmBus.inf';
         const { exec } = require('child_process');
+        const batCandidates = [
+          path.resolve(__dirname, '..', 'drivers', 'activate_vigem.bat'),
+          path.resolve(process.cwd(), 'drivers', 'activate_vigem.bat'),
+          path.resolve(process.cwd(), 'desktop-companion', 'drivers', 'activate_vigem.bat'),
+          (process as any).resourcesPath ? path.join((process as any).resourcesPath, 'drivers', 'activate_vigem.bat') : ''
+        ].filter(p => !!p);
 
-        // If ViGEm files are already installed on disk, activate the root device node directly
-        if (fs.existsSync(nefconPath) && fs.existsSync(infPath)) {
-          const activateCmd = `powershell -NoProfile -Command "Start-Process -FilePath 'cmd.exe' -ArgumentList '/c \\"${nefconPath}\\" --install-driver --inf-path \\"${infPath}\\" & \\"${nefconPath}\\" --create-device-node --hardware-id \\"Nefarius\\ViGEmBus\\Gen1\\" --class-name \\"System\\" --class-guid \\"{4D36E97D-E325-11CE-BFC1-08002BE10318}\\"' -Verb RunAs"`;
-          exec(activateCmd);
+        const batPath = batCandidates.find(p => fs.existsSync(p));
+
+        if (batPath) {
+          const runCmd = `powershell -NoProfile -Command "Start-Process -FilePath '${batPath.replace(/'/g, "''")}' -Verb RunAs"`;
+          exec(runCmd, (err: any) => {
+            if (err) console.error('[Server] Failed to launch activate_vigem.bat:', err);
+          });
           res.json({
             success: true,
             launched: true,
-            message: 'Activating ViGEmBus driver device. Please click "Yes" on the Windows Administrator prompt, then click "Detect Driver".'
+            message: 'Xbox 360 controller driver & firewall setup launched! Please click "Yes" on the Windows Administrator prompt.'
           });
           return;
         }
 
         const installerPath = this.resolveViGEmInstallerPath();
         if (installerPath && fs.existsSync(installerPath)) {
-          const cmd = `start "" "${installerPath}"`;
-          exec(cmd, (err: any) => {
-            if (err) {
-              console.warn('[Server] Direct start failed, trying PowerShell Start-Process:', err);
-              exec(`powershell -NoProfile -Command "Start-Process -FilePath '${installerPath.replace(/'/g, "''")}' -Verb RunAs"`);
-            }
-          });
+          const cmd = `powershell -NoProfile -Command "Start-Process -FilePath '${installerPath.replace(/'/g, "''")}' -Verb RunAs"`;
+          exec(cmd);
           res.json({
             success: true,
             launched: true,
             path: installerPath,
-            message: 'ViGEmBus installer launched! Accept the Windows administrator (UAC) prompt, finish the setup wizard, then click "Detect Driver".'
+            message: 'ViGEmBus installer launched! Accept the Windows administrator prompt, finish setup, then click "Detect Driver".'
           });
         } else {
           exec('start https://github.com/nefarius/ViGEmBus/releases/latest');
@@ -188,6 +192,35 @@ export class CompanionServer {
       } catch (e: any) {
         res.status(500).json({ error: e.message });
       }
+    });
+
+    this.app.post('/api/client/heartbeat', (req, res) => {
+      const ip = (req.ip || req.socket.remoteAddress || 'unknown').replace(/^.*:/, '');
+      const clientId = req.body?.clientId || `device_${ip}`;
+      const now = Date.now();
+      const existing = this.clientSessions.get(clientId);
+      this.clientSessions.set(clientId, {
+        id: clientId,
+        ip,
+        port: req.socket.remotePort || 0,
+        lastPing: now,
+        latencyMs: typeof req.body?.latency === 'number' ? req.body.latency : 2,
+        packetCount: (existing?.packetCount || 0) + 1
+      });
+      if (req.body?.inputs) {
+        const inp = req.body.inputs;
+        if (typeof inp.steer === 'number') {
+          this.emulator.updateAxes(inp.steer, inp.throttle || 0, inp.brake || 0);
+        }
+        this.currentInputs = {
+          steer: inp.steer || 0,
+          throttle: inp.throttle || 0,
+          brake: inp.brake || 0,
+          activeButtons: inp.buttons || []
+        };
+      }
+      this.broadcastTelemetry();
+      res.json({ success: true, timestamp: now });
     });
 
     this.app.post('/api/server/toggle', async (req, res) => {
@@ -257,8 +290,21 @@ export class CompanionServer {
     });
   }
 
-  private setupWebSockets() {
-    this.wss.on('connection', (ws) => {
+  private setupWebSocketListeners(wssInstance: WebSocketServer) {
+    wssInstance.on('connection', (ws, req) => {
+      const clientIp = (req.socket.remoteAddress || '127.0.0.1').replace(/^.*:/, '');
+      const clientId = `ws_${clientIp}_${req.socket.remotePort || Math.floor(Math.random() * 10000)}`;
+
+      this.clientSessions.set(clientId, {
+        id: clientId,
+        ip: clientIp,
+        port: req.socket.remotePort || 0,
+        lastPing: Date.now(),
+        latencyMs: 1,
+        packetCount: 1
+      });
+      this.broadcastTelemetry();
+
       ws.send(JSON.stringify({
         type: 'INIT_STATE',
         data: {
@@ -273,6 +319,13 @@ export class CompanionServer {
       ws.on('message', (message) => {
         try {
           const msg = JSON.parse(message.toString());
+          const now = Date.now();
+          const session = this.clientSessions.get(clientId);
+          if (session) {
+            session.lastPing = now;
+            session.packetCount++;
+          }
+
           if (msg.type === 'CONTROLLER_INPUT' && this.isUdpRunning) {
             const packet: ControllerPacket = msg.data;
             if (typeof packet.steer === 'number') {
@@ -294,19 +347,41 @@ export class CompanionServer {
               brake: packet.brake || 0,
               activeButtons: packet.buttonsDown || []
             };
+
+            if (now - this.lastTelemetryBroadcast >= 50) {
+              this.lastTelemetryBroadcast = now;
+              this.broadcastTelemetry();
+            }
           }
         } catch (_) {}
       });
+
+      ws.on('close', () => {
+        this.clientSessions.delete(clientId);
+        this.broadcastTelemetry();
+      });
+
+      ws.on('error', () => {
+        this.clientSessions.delete(clientId);
+      });
     });
+  }
+
+  private setupWebSockets() {
+    this.setupWebSocketListeners(this.wss);
 
     this.cleanupInterval = setInterval(() => {
       const now = Date.now();
+      let changed = false;
       for (const [id, client] of this.clientSessions.entries()) {
         if (now - client.lastPing > 5000) {
           this.clientSessions.delete(id);
+          changed = true;
         }
       }
-      this.broadcastTelemetry();
+      if (changed) {
+        this.broadcastTelemetry();
+      }
     }, 500);
   }
 
@@ -379,30 +454,48 @@ export class CompanionServer {
     };
 
     const payload = JSON.stringify({ type: 'TELEMETRY_UPDATE', data: state });
-    this.wss.clients.forEach((client) => {
+    const send = (client: WebSocket) => {
       if (client.readyState === WebSocket.OPEN) {
         client.send(payload);
       }
-    });
+    };
+    this.wss.clients.forEach(send);
+    this.secondaryWss?.clients.forEach(send);
   }
 
   public async startHttp(): Promise<void> {
-    return new Promise((resolve) => {
-      this.server.once('error', (err: any) => {
-        if (err.code === 'EADDRINUSE') {
-          console.warn(`[Server] Port ${this.httpPort} is already bound by an existing companion instance.`);
+    const bindServer = (serverInstance: http.Server, port: number, label: string) => {
+      return new Promise<void>((resolve) => {
+        serverInstance.once('error', (err: any) => {
+          if (err.code === 'EADDRINUSE') {
+            console.warn(`[Server] Port ${port} (${label}) already in use.`);
+          } else {
+            console.error(`[Server] ${label} error:`, err);
+          }
           resolve();
-        } else {
-          console.error('[Server] HTTP error:', err);
-          resolve();
-        }
-      });
+        });
 
-      this.server.listen(this.httpPort, () => {
-        console.log(`[Server] HTTP server listening on http://localhost:${this.httpPort}`);
-        resolve();
+        serverInstance.listen(port, '0.0.0.0', () => {
+          console.log(`[Server] HTTP & WebSocket (${label}) listening on http://0.0.0.0:${port}`);
+          resolve();
+        });
       });
-    });
+    };
+
+    // Bind primary HTTP/WS port (45450)
+    await bindServer(this.server, this.httpPort, 'Primary');
+
+    // Also bind HTTP & WebSocket on the exact UDP port (45455) so clients connecting to 45455 work seamlessly!
+    if (this.udpPort !== this.httpPort) {
+      try {
+        this.secondaryServer = http.createServer(this.app);
+        this.secondaryWss = new WebSocketServer({ server: this.secondaryServer });
+        this.setupWebSocketListeners(this.secondaryWss);
+        await bindServer(this.secondaryServer, this.udpPort, 'Unified UDP/HTTP');
+      } catch (e) {
+        console.warn('[Server] Could not bind secondary HTTP/WS server:', e);
+      }
+    }
   }
 
   public stopAll() {
@@ -412,6 +505,12 @@ export class CompanionServer {
       clearInterval(this.cleanupInterval);
       this.cleanupInterval = null;
     }
+    try {
+      this.secondaryWss?.close();
+    } catch (_) {}
+    try {
+      this.secondaryServer?.close();
+    } catch (_) {}
     try {
       this.wss.close();
     } catch (_) {}

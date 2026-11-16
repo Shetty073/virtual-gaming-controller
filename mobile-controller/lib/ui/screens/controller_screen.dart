@@ -1,6 +1,8 @@
 import 'dart:async';
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:http/http.dart' as http;
 import '../../core/models/controller_models.dart';
 import '../../core/network/udp_client.dart';
 import '../widgets/steering_wheel.dart';
@@ -16,12 +18,14 @@ enum CockpitLayout {
 class ControllerScreen extends StatefulWidget {
   final String host;
   final int port;
+  final int? httpPort;
   final GameProfile profile;
 
   const ControllerScreen({
     super.key,
     required this.host,
     required this.port,
+    this.httpPort,
     required this.profile,
   });
 
@@ -32,6 +36,9 @@ class ControllerScreen extends StatefulWidget {
 class _ControllerScreenState extends State<ControllerScreen> {
   final UdpControllerClient _client = UdpControllerClient();
   Timer? _streamTimer;
+  Timer? _heartbeatTimer;
+  bool _isServerOnline = true;
+  int _pingMs = 1;
 
   int _selectedDegrees = 900;
   double _wheelSize = 200.0; // Dynamic resizable wheel (150px - 260px)
@@ -65,7 +72,8 @@ class _ControllerScreenState extends State<ControllerScreen> {
       DeviceOrientation.landscapeRight,
     ]);
 
-    _client.connect(widget.host, widget.port);
+    final effectiveHttpPort = widget.httpPort ?? widget.port;
+    _client.connect(widget.host, widget.port, targetWsPort: effectiveHttpPort);
 
     // Stream controller state at ~50Hz (20ms interval) with zero memory allocations
     _streamTimer = Timer.periodic(const Duration(milliseconds: 20), (_) {
@@ -79,10 +87,42 @@ class _ControllerScreenState extends State<ControllerScreen> {
       if (_pendingDown.isNotEmpty) _pendingDown.clear();
       if (_pendingUp.isNotEmpty) _pendingUp.clear();
     });
+
+    // Active heartbeat check every 1500ms to monitor true server state
+    _startHeartbeat();
+  }
+
+  void _startHeartbeat() {
+    final effectiveHttpPort = widget.httpPort ?? widget.port;
+    _heartbeatTimer?.cancel();
+    _heartbeatTimer = Timer.periodic(const Duration(milliseconds: 1500), (_) async {
+      final start = DateTime.now().millisecondsSinceEpoch;
+      try {
+        final res = await http
+            .get(Uri.parse('http://${widget.host}:$effectiveHttpPort/api/status'))
+            .timeout(const Duration(milliseconds: 1200));
+
+        if (!mounted) return;
+        if (res.statusCode == 200) {
+          final data = jsonDecode(res.body);
+          final elapsed = DateTime.now().millisecondsSinceEpoch - start;
+          setState(() {
+            _isServerOnline = data['isUdpRunning'] == true;
+            _pingMs = elapsed;
+          });
+        } else {
+          setState(() => _isServerOnline = false);
+        }
+      } catch (_) {
+        if (!mounted) return;
+        setState(() => _isServerOnline = false);
+      }
+    });
   }
 
   @override
   void dispose() {
+    _heartbeatTimer?.cancel();
     _streamTimer?.cancel();
     _client.disconnect();
     SystemChrome.setPreferredOrientations([
@@ -529,21 +569,28 @@ class _ControllerScreenState extends State<ControllerScreen> {
                     Container(
                       width: 8,
                       height: 8,
-                      decoration: const BoxDecoration(
+                      decoration: BoxDecoration(
                         shape: BoxShape.circle,
-                        color: Color(0xFF00FF66),
-                        boxShadow: [BoxShadow(color: Color(0xFF00FF66), blurRadius: 6)],
+                        color: _isServerOnline ? const Color(0xFF00FF66) : const Color(0xFFFF0055),
+                        boxShadow: [
+                          BoxShadow(
+                            color: _isServerOnline ? const Color(0xFF00FF66) : const Color(0xFFFF0055),
+                            blurRadius: 6,
+                          )
+                        ],
                       ),
                     ),
                     const SizedBox(width: 6),
                     Expanded(
                       child: Text(
-                        'CONNECTED TO ${widget.host}  •  ${widget.profile.name.toUpperCase()}',
-                        style: const TextStyle(
-                          color: Color(0xFF94A3B8),
+                        _isServerOnline
+                            ? 'LIVE • ${widget.host}:${widget.port} • ${_pingMs}ms • ${widget.profile.name.toUpperCase()}'
+                            : 'PAUSED / OFFLINE (Click START SERVER on Desktop)',
+                        style: TextStyle(
+                          color: _isServerOnline ? const Color(0xFF94A3B8) : const Color(0xFFFF0055),
                           fontSize: 9.5,
                           fontWeight: FontWeight.bold,
-                          letterSpacing: 1,
+                          letterSpacing: 0.8,
                         ),
                         overflow: TextOverflow.ellipsis,
                       ),

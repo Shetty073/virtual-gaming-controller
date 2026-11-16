@@ -24,6 +24,8 @@ export class UdpServer {
     this.setupListeners();
   }
 
+  private lastLogTime = 0;
+
   private setupListeners() {
     if (!this.socket) return;
 
@@ -41,6 +43,12 @@ export class UdpServer {
 
     this.socket.on('message', (msg: Buffer, rinfo: dgram.RemoteInfo) => {
       try {
+        const now = Date.now();
+        if (now - this.lastLogTime > 5000) {
+          this.lastLogTime = now;
+          console.log(`[UDP] Active input stream from ${rinfo.address}:${rinfo.port} (${msg.length} bytes)`);
+        }
+
         let packet: ControllerPacket;
 
         // Fast Binary Packet Protocol (Magic 0x5647 'VG')
@@ -120,7 +128,7 @@ export class UdpServer {
       }
       try {
         this.createSocket();
-        this.socket!.bind(this.port, () => {
+        this.socket!.bind({ port: this.port, address: '0.0.0.0' }, () => {
           this.isBound = true;
           resolve();
         });

@@ -1,5 +1,4 @@
 import 'dart:convert';
-import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:url_launcher/url_launcher.dart';
@@ -296,35 +295,47 @@ class _HomeScreenState extends State<HomeScreen> {
     setState(() => _isConnecting = true);
 
     bool isConnected = false;
+    int effectiveHttpPort = port;
+    String errorMessage = 'Make sure Desktop Companion is running at $host:$port';
 
-    // Check HTTP status API (port 45450 by default or test UDP handshake)
+    // First attempt: Connect to the exact port entered by the user
     try {
       final response = await http
-          .get(Uri.parse('http://$host:45450/api/status'))
-          .timeout(const Duration(milliseconds: 1500));
+          .get(Uri.parse('http://$host:$port/api/status'))
+          .timeout(const Duration(milliseconds: 2500));
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
-        if (data['isUdpRunning'] == true || data['status'] == 'online') {
+        if (data['isUdpRunning'] == true) {
           isConnected = true;
+          effectiveHttpPort = port;
+        } else {
+          errorMessage = 'Companion server is currently STOPPED. Click "START SERVER" in the desktop app.';
         }
       }
     } catch (_) {
-      // If HTTP fails or is blocked on subnet, try quick UDP socket check
-      try {
-        final testSocket = await RawDatagramSocket.bind(InternetAddress.anyIPv4, 0);
-        final pingPayload = utf8.encode('{"seq":0,"ping":true}');
-        final addresses = await InternetAddress.lookup(host).timeout(const Duration(milliseconds: 800));
-        if (addresses.isNotEmpty) {
-          testSocket.send(pingPayload, addresses.first, port);
-          // If DNS/IP resolution succeeded and socket dispatched
-          // and discovery found it, treat as reachable
-          if (_discoveredServers.any((s) => s['host'] == host)) {
-            isConnected = true;
+      // Second attempt: If user entered UDP port 45455, check legacy HTTP port 45450 as fallback
+      if (port != 45450) {
+        try {
+          final altResponse = await http
+              .get(Uri.parse('http://$host:45450/api/status'))
+              .timeout(const Duration(milliseconds: 2000));
+
+          if (altResponse.statusCode == 200) {
+            final data = jsonDecode(altResponse.body);
+            if (data['isUdpRunning'] == true) {
+              isConnected = true;
+              effectiveHttpPort = 45450;
+            } else {
+              errorMessage = 'Companion server is currently STOPPED. Click "START SERVER" in the desktop app.';
+            }
           }
-        }
-        testSocket.close();
-      } catch (_) {}
+        } catch (_) {}
+      }
+
+      if (!isConnected && errorMessage == 'Make sure Desktop Companion is running at $host:$port') {
+        errorMessage = 'Cannot reach Desktop Companion at $host:$port. Ensure PC and phone are on the same Wi-Fi.';
+      }
     }
 
     if (!mounted) return;
@@ -348,7 +359,7 @@ class _HomeScreenState extends State<HomeScreen> {
                     ),
                     const SizedBox(height: 2),
                     Text(
-                      'Make sure Desktop Companion is running at $host:$port',
+                      errorMessage,
                       style: const TextStyle(fontSize: 10.5, color: Color(0xFFCBD5E1)),
                     ),
                   ],
@@ -357,7 +368,7 @@ class _HomeScreenState extends State<HomeScreen> {
             ],
           ),
           backgroundColor: const Color(0xFFDC2626),
-          duration: const Duration(seconds: 3),
+          duration: const Duration(seconds: 4),
           behavior: SnackBarBehavior.floating,
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
           action: SnackBarAction(
@@ -375,6 +386,7 @@ class _HomeScreenState extends State<HomeScreen> {
         builder: (_) => ControllerScreen(
           host: host,
           port: port,
+          httpPort: effectiveHttpPort,
           profile: _selectedProfile!,
         ),
       ),
